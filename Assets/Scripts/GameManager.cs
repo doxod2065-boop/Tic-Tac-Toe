@@ -1,122 +1,205 @@
 ﻿using UnityEngine;
 using UnityEngine.UI;
+using Abilities;
 
 public class GameManager : MonoBehaviour
 {
-    [Header("Основные компоненты")]
-    [SerializeField] private BoardController m_boardController;
-    [SerializeField] private UIManager m_uiManager;
+    [Header("Компоненты")]
+    [SerializeField] private BoardController board;
+    [SerializeField] private UIManager ui;
+    [SerializeField] private AbilityManager abilityManager;
+    [SerializeField] private Button restartButton;
 
-    [Header("Кнопка рестарта (опционально)")]
-    [SerializeField] private Button m_restartButton;
+    private bool isXTurn = true;
+    private bool isGameOver = false;
+    private bool isExtraMove = false;
 
-    private bool m_isXTurn = true;
-    private bool m_gameOver = false;
+    private AbilityType pendingAbility = AbilityType.None;
+    private string pendingOwner = "";
 
-    void Start()
+    private void Start()
     {
         SetupRestartButton();
-
+        if (abilityManager == null) abilityManager = FindFirstObjectByType<AbilityManager>();
         StartNewGame();
     }
 
-    void SetupRestartButton()
+    private void SetupRestartButton()
     {
-        if (m_restartButton == null)
+        if (restartButton == null)
         {
-            GameObject restartObj = GameObject.Find("RestartButton");
-            if (restartObj != null)
-            {
-                m_restartButton = restartObj.GetComponent<Button>();
-            }
-            else
-            {
-                Button[] allButtons = FindObjectsByType<Button>(FindObjectsSortMode.None);
-                foreach (Button btn in allButtons)
-                {
-                    if (btn.gameObject.name.ToLower().Contains("restart"))
-                    {
-                        m_restartButton = btn;
-                        break;
-                    }
-                }
-            }
+            GameObject obj = GameObject.Find("RestartButton");
+            if (obj != null) restartButton = obj.GetComponent<Button>();
         }
-
-        if (m_restartButton != null)
+        if (restartButton != null)
         {
-            m_restartButton.onClick.RemoveAllListeners();
-            m_restartButton.onClick.AddListener(RestartGame);
-            m_restartButton.interactable = true;
-            m_restartButton.gameObject.SetActive(true);
+            restartButton.onClick.RemoveAllListeners();
+            restartButton.onClick.AddListener(RestartGame);
+            restartButton.interactable = true;
         }
     }
 
-    public void RestartGame()
-    {
-        StartNewGame();
+    public void RestartGame() => StartNewGame();
 
-        if (m_restartButton != null)
-        {
-            m_restartButton.interactable = true;
-        }
+    private void StartNewGame()
+    {
+        if (board == null) { Debug.LogError("BoardController не назначен!"); return; }
+
+        isXTurn = true;
+        isGameOver = false;
+        isExtraMove = false;
+        pendingAbility = AbilityType.None;
+        pendingOwner = "";
+
+        board.ResetBoard();
+        abilityManager?.ResetAll();
+        UpdateForPlayer("X");
     }
 
-    public void StartNewGame()
+    private void UpdateForPlayer(string player)
     {
-        m_isXTurn = true;
-        m_gameOver = false;
-
-        if (m_boardController != null)
-        {
-            m_boardController.ResetBoard();
-        }
-
-        if (m_uiManager != null)
-        {
-            m_uiManager.UpdateStatus(m_isXTurn);
-        }
-
-        if (m_restartButton != null && !m_restartButton.interactable)
-        {
-            m_restartButton.interactable = true;
-        }
+        board.UpdateVisibilityForPlayer(player);
+        board.HighlightValidMoves(player);
+        abilityManager?.StartTurn(player);
+        ui?.UpdateTurn(player == "X");
     }
 
-    public void MakeMove(int cellIndex)
+    public void OnCellClicked(int x, int y)
     {
-        if (m_gameOver || !m_boardController.IsCellEmpty(cellIndex))
+        if (isGameOver) return;
+
+        string currentPlayer = isXTurn ? "X" : "O";
+
+        if (pendingAbility != AbilityType.None && pendingOwner == currentPlayer)
+        {
+            ApplyPendingAbility(x, y);
             return;
-
-        string currentSymbol = m_isXTurn ? "X" : "O";
-        m_boardController.MarkCell(cellIndex, currentSymbol);
-
-        GameResult result = m_boardController.CheckGameResult();
-
-        if (result != GameResult.None)
-        {
-            m_gameOver = true;
-
-            string resultMessage = result == GameResult.Win ?
-                $"Победили {currentSymbol}!" : "Ничья!";
-
-            m_uiManager.ShowGameResult(resultMessage);
-            m_boardController.DisableAllCells();
-
-            if (m_restartButton != null)
-            {
-                m_restartButton.interactable = true;
-            }
         }
-        else
-        {
-            m_isXTurn = !m_isXTurn;
-            m_uiManager.UpdateStatus(m_isXTurn);
-        }
+
+        ExecuteNormalMove(x, y, currentPlayer);
     }
 
-    public void TestForceRestart()
+    private void ExecuteNormalMove(int x, int y, string player)
     {
-        RestartGame();
+        if (!board.IsCellEmpty(x, y))
+        {
+            Debug.Log("Клетка уже занята!");
+            return;
+        }
+
+        var valid = board.GetValidMoves(player);
+        if (!valid.Contains(new Vector2Int(x, y)))
+        {
+            Debug.Log("Недопустимый ход!");
+            return;
+        }
+
+        board.MarkCell(x, y, player);
+        board.UpdateVisibilityForPlayer(player);
+        board.HighlightValidMoves(player);
+
+        if (CheckVictory())
+        {
+            EndGame();
+            return;
+        }
+
+        AbilityType usedBonus = abilityManager?.ApplyBonus(player) ?? AbilityType.None;
+
+        if (usedBonus == AbilityType.DoubleMove && !isExtraMove)
+        {
+            isExtraMove = true;
+            ui?.UpdateTurn(isXTurn);
+            return;
+        }
+        else if (usedBonus == AbilityType.Recon || usedBonus == AbilityType.Shoot)
+        {
+            pendingAbility = usedBonus;
+            pendingOwner = player;
+            board.SetAllCellsInteractable(true);
+            board.HighlightAllCells(true);
+            ui?.UpdateTurn(isXTurn);
+            return;
+        }
+
+        if (isExtraMove)
+        {
+            isExtraMove = false;
+            SwitchTurn();
+            return;
+        }
+
+        SwitchTurn();
+    }
+
+    private void ApplyPendingAbility(int x, int y)
+    {
+        string player = pendingOwner;
+
+        if (pendingAbility == AbilityType.Recon)
+        {
+            board.RevealArea(x, y, player);
+            ui?.ShowMessage($"Разведка в ({x},{y})");
+        }
+        else if (pendingAbility == AbilityType.Shoot)
+        {
+            if (board.IsStartCell(x, y))
+                Debug.Log("Нельзя стрелять в стартовую клетку!");
+            else if (board.IsCellEmpty(x, y))
+                Debug.Log("Пустая клетка — выстрел без результата.");
+            else
+                board.RemovePiece(x, y);
+        }
+
+        board.HighlightAllCells(false);
+        pendingAbility = AbilityType.None;
+        pendingOwner = "";
+
+        board.UpdateVisibilityForPlayer(player);
+
+        if (CheckVictory())
+            EndGame();
+        else
+            SwitchTurn();
+    }
+
+    private void SwitchTurn()
+    {
+        isXTurn = !isXTurn;
+        string nextPlayer = isXTurn ? "X" : "O";
+
+        if (!board.HasValidMoves(nextPlayer))
+        {
+            isGameOver = true;
+            ui?.ShowMessage("Ничья! Нет доступных ходов.");
+            board.DisableAllCells();
+            board.ClearAllHighlights();
+            return;
+        }
+
+        UpdateForPlayer(nextPlayer);
+    }
+
+    private bool CheckVictory()
+    {
+        if (board.CheckWin("X", 10))
+        {
+            isGameOver = true;
+            ui?.ShowMessage("Победили X!");
+            return true;
+        }
+        if (board.CheckWin("O", 10))
+        {
+            isGameOver = true;
+            ui?.ShowMessage("Победили O!");
+            return true;
+        }
+        return false;
+    }
+
+    private void EndGame()
+    {
+        board.DisableAllCells();
+        board.ClearAllHighlights();
     }
 }

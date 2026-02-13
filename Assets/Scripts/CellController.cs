@@ -4,78 +4,109 @@ using TMPro;
 
 public class CellController : MonoBehaviour
 {
-    [Header("Настройки")]
-    public int cellIndex = -1;
+    public Vector2Int Coordinates { get; private set; }
 
-    [Header("Ссылки")]
     [SerializeField] private Button button;
     [SerializeField] private TextMeshProUGUI symbolText;
+    [SerializeField] private Image background;
 
     private GameManager gameManager;
+    private Color defaultColor;
+    private Color hiddenColor = new Color(0.15f, 0.15f, 0.15f, 1f);
+    private string currentSymbol = "";
+    private bool isHighlighted = false;
+    private bool isVisible = true;
+    private Color? temporaryColor = null;
 
-    void Start()
+    private void Awake()
     {
-        if (button == null)
-        {
-            button = GetComponent<Button>();
-        }
+        if (button == null) button = GetComponent<Button>();
+        if (symbolText == null) symbolText = GetComponentInChildren<TextMeshProUGUI>();
+        if (background == null) background = GetComponent<Image>();
+        if (background != null) defaultColor = background.color;
 
-        if (symbolText == null)
-        {
-            symbolText = GetComponentInChildren<TextMeshProUGUI>();
-        }
-
-        if (gameManager == null)
-        {
-            gameManager = FindFirstObjectByType<GameManager>();
-        }
-
-        if (button != null)
-        {
-            button.onClick.RemoveAllListeners();
-            button.onClick.AddListener(OnCellClick);
-        }
+        button?.onClick.AddListener(OnClick);
     }
 
-    void OnCellClick()
+    private void Start()
     {
-
-        if (gameManager != null)
-        {
-            gameManager.MakeMove(cellIndex);
-        }
+        if (gameManager == null) gameManager = FindFirstObjectByType<GameManager>();
     }
+
+    private void OnClick() => gameManager?.OnCellClicked(Coordinates.x, Coordinates.y);
+
+    public void SetCoordinates(int x, int y) => Coordinates = new Vector2Int(x, y);
 
     public void SetSymbol(string symbol)
     {
-
+        currentSymbol = symbol;
         if (symbolText != null)
         {
             symbolText.text = symbol;
+            symbolText.color = symbol == "X" ? Color.red : Color.blue;
         }
-
-        if (button != null)
-        {
-            button.interactable = false;
-        }
+        SetInteractable(false);
     }
 
     public void ResetCell()
     {
-
-        if (symbolText != null)
-        {
-            symbolText.text = "";
-        }
-
-        if (button != null)
-        {
-            button.interactable = true;
-        }
+        currentSymbol = "";
+        if (symbolText != null) symbolText.text = "";
+        SetInteractable(true);
+        isHighlighted = false;
+        temporaryColor = null;
+        isVisible = true;
+        if (background != null) background.color = defaultColor;
     }
 
-    public void SetIndex(int index)
+    public void Highlight(bool active)
     {
-        cellIndex = index;
+        isHighlighted = active;
+        UpdateBackground();
+    }
+
+    public void ClearHighlight()
+    {
+        isHighlighted = false;
+        UpdateBackground();
+    }
+
+    public void SetVisible(bool visible)
+    {
+        isVisible = visible;
+        UpdateBackground();
+    }
+
+    public void SetTemporaryHighlight(Color color)
+    {
+        temporaryColor = color;
+        if (background != null) background.color = color;
+    }
+
+    public void ClearTemporaryHighlight()
+    {
+        temporaryColor = null;
+        UpdateBackground();
+    }
+
+    private void UpdateBackground()
+    {
+        if (background == null) return;
+        if (temporaryColor.HasValue)
+        {
+            background.color = temporaryColor.Value;
+            return;
+        }
+        if (isHighlighted)
+        {
+            background.color = new Color(0.3f, 1f, 0.3f, 0.5f);
+            return;
+        }
+        background.color = isVisible ? defaultColor : hiddenColor;
+    }
+
+    public void SetInteractable(bool value)
+    {
+        if (button != null) button.interactable = value;
     }
 }
