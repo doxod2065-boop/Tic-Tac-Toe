@@ -1,19 +1,19 @@
-п»їusing UnityEngine;
+using UnityEngine;
 using TMPro;
 
 public class UIManager : MonoBehaviour
 {
-    [SerializeField] private TextMeshProUGUI statusText;
+    [SerializeField] private TextMeshProUGUI m_statusText;
 
-    public void UpdateTurn(bool isXTurn)
+    public void UpdateStatus(bool isXTurn)
     {
-        if (statusText != null)
-            statusText.text = isXTurn ? "РҐРѕРґ: РљСЂРµСЃС‚РёРєРё (X)" : "РҐРѕРґ: РќРѕР»РёРєРё (O)";
+        if (m_statusText != null)
+            m_statusText.text = isXTurn ? "Ход: Крестики (X)" : "Ход: Нолики (O)";
     }
 
-    public void ShowMessage(string message)
+    public void ShowGameResult(string message)
     {
-        if (statusText != null)
-            statusText.text = message;
+        if (m_statusText != null)
+            m_statusText.text = message;
     }
 }

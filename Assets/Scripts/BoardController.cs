@@ -1,205 +1,296 @@
 ﻿using UnityEngine;
 using System.Collections.Generic;
 
+public enum GameResult
+{
+    None,
+    Win,
+    Draw
+}
+
 public class BoardController : MonoBehaviour
 {
-    [Header("Размеры")]
-    public int width = 7;
-    public int height = 7;
+    [Header("Размеры поля")]
+    public int m_width = 7;
+    public int m_height = 7;
 
-    private CellController[,] cells;
-    private string[,] boardState;
+    private CellController[,] m_cells;
+    private string[,] m_boardState;
 
-    private Vector2Int startX = new Vector2Int(0, 6);
-    private Vector2Int startO = new Vector2Int(6, 0);
+    private Vector2Int m_startX = new Vector2Int(0, 6);
+    private Vector2Int m_startO = new Vector2Int(6, 0);
 
-    private HashSet<Vector2Int> revealedX = new HashSet<Vector2Int>();
-    private HashSet<Vector2Int> revealedO = new HashSet<Vector2Int>();
+    private HashSet<Vector2Int> m_revealedCellsX = new HashSet<Vector2Int>();
+    private HashSet<Vector2Int> m_revealedCellsO = new HashSet<Vector2Int>();
 
-    private static readonly Vector2Int[] neighborOffsets = new Vector2Int[8]
+    void Awake()
     {
-        new Vector2Int(-1, -1), new Vector2Int(0, -1), new Vector2Int(1, -1),
-        new Vector2Int(-1,  0),                      new Vector2Int(1,  0),
-        new Vector2Int(-1,  1), new Vector2Int(0,  1), new Vector2Int(1,  1)
-    };
-
-    private void Awake()
-    {
-        cells = new CellController[width, height];
-        boardState = new string[width, height];
-        FindAndAssignCells();
+        InitializeArrays();
     }
 
-    private void FindAndAssignCells()
+    void Start()
     {
-        for (int i = 0; i < transform.childCount; i++)
+        if (m_cells[0, 0] == null)
+            FindAndAssignCells();
+    }
+
+    void InitializeArrays()
+    {
+        m_cells = new CellController[m_width, m_height];
+        m_boardState = new string[m_width, m_height];
+    }
+
+    void FindAndAssignCells()
+    {
+        if (m_cells == null || m_boardState == null)
+            InitializeArrays();
+
+        int childCount = transform.childCount;
+        if (childCount != m_width * m_height)
+        {
+            return;
+        }
+
+        for (int i = 0; i < childCount; i++)
         {
             Transform child = transform.GetChild(i);
             CellController cell = child.GetComponent<CellController>();
             if (cell != null)
             {
-                int x = i % width;
-                int y = i / width;
+                int x = i % m_width;
+                int y = i / m_width;
                 cell.SetCoordinates(x, y);
-                cells[x, y] = cell;
+                m_cells[x, y] = cell;
             }
         }
     }
 
     public void ResetBoard()
     {
-        for (int x = 0; x < width; x++)
-            for (int y = 0; y < height; y++)
-                boardState[x, y] = "";
+        if (m_cells[0, 0] == null)
+            FindAndAssignCells();
 
-        foreach (var cell in cells) cell?.ResetCell();
+        if (m_boardState == null)
+            m_boardState = new string[m_width, m_height];
 
-        revealedX.Clear();
-        revealedO.Clear();
+        for (int x = 0; x < m_width; x++)
+            for (int y = 0; y < m_height; y++)
+                m_boardState[x, y] = "";
 
-        MarkCell(startX.x, startX.y, "X");
-        MarkCell(startO.x, startO.y, "O");
+        for (int x = 0; x < m_width; x++)
+            for (int y = 0; y < m_height; y++)
+                m_cells[x, y]?.ResetCell();
+
+        m_revealedCellsX.Clear();
+        m_revealedCellsO.Clear();
+
+        MarkCell(m_startX.x, m_startX.y, "X");
+        MarkCell(m_startO.x, m_startO.y, "O");
     }
 
-    public bool IsCellEmpty(int x, int y) =>
-        x >= 0 && x < width && y >= 0 && y < height && string.IsNullOrEmpty(boardState[x, y]);
+    public bool IsCellEmpty(int x, int y)
+    {
+        if (x < 0 || x >= m_width || y < 0 || y >= m_height) return false;
+        return string.IsNullOrEmpty(m_boardState[x, y]);
+    }
 
     public void MarkCell(int x, int y, string symbol)
     {
-        if (x < 0 || x >= width || y < 0 || y >= height) return;
-        boardState[x, y] = symbol;
-        cells[x, y]?.SetSymbol(symbol);
+        if (x < 0 || x >= m_width || y < 0 || y >= m_height) return;
+        m_boardState[x, y] = symbol;
+        m_cells[x, y]?.SetSymbol(symbol);
     }
 
-    public bool IsStartCell(int x, int y) =>
-        (x == startX.x && y == startX.y) || (x == startO.x && y == startO.y);
+    public bool IsStartCell(int x, int y)
+    {
+        return (x == m_startX.x && y == m_startX.y) || (x == m_startO.x && y == m_startO.y);
+    }
 
     public void RemovePiece(int x, int y)
     {
+        if (x < 0 || x >= m_width || y < 0 || y >= m_height) return;
         if (IsStartCell(x, y)) return;
-        boardState[x, y] = "";
-        cells[x, y]?.ResetCell();
+
+        m_boardState[x, y] = "";
+        m_cells[x, y]?.ResetCell();
     }
 
     public void RevealArea(int cx, int cy, string player)
     {
-        var target = (player == "X") ? revealedX : revealedO;
-        Vector2Int[] offsets = { new(0, 0), new(1, 0), new(-1, 0), new(0, 1), new(0, -1) };
-        foreach (var off in offsets)
+        HashSet<Vector2Int> targetSet = (player == "X") ? m_revealedCellsX : m_revealedCellsO;
+
+        Vector2Int[] offsets = {
+            new Vector2Int(0, 0),
+            new Vector2Int(1, 0),
+            new Vector2Int(-1, 0),
+            new Vector2Int(0, 1),
+            new Vector2Int(0, -1)
+        };
+
+        foreach (var offset in offsets)
         {
-            int nx = cx + off.x, ny = cy + off.y;
-            if (nx >= 0 && nx < width && ny >= 0 && ny < height)
-                target.Add(new Vector2Int(nx, ny));
+            int nx = cx + offset.x;
+            int ny = cy + offset.y;
+            if (nx >= 0 && nx < m_width && ny >= 0 && ny < m_height)
+            {
+                targetSet.Add(new Vector2Int(nx, ny));
+            }
         }
-        UpdateVisibilityForPlayer(player);
     }
 
     public void UpdateVisibilityForPlayer(string player)
     {
-        HashSet<Vector2Int> visible = new HashSet<Vector2Int>();
+        HashSet<Vector2Int> visibleCells = new HashSet<Vector2Int>();
 
-        for (int x = 0; x < width; x++)
+        for (int x = 0; x < m_width; x++)
         {
-            for (int y = 0; y < height; y++)
+            for (int y = 0; y < m_height; y++)
             {
-                if (boardState[x, y] == player)
+                if (m_boardState[x, y] == player)
                 {
-                    visible.Add(new Vector2Int(x, y));
-                    foreach (var off in neighborOffsets)
+                    visibleCells.Add(new Vector2Int(x, y));
+                    for (int dx = -1; dx <= 1; dx++)
                     {
-                        int nx = x + off.x, ny = y + off.y;
-                        if (nx >= 0 && nx < width && ny >= 0 && ny < height)
-                            visible.Add(new Vector2Int(nx, ny));
+                        for (int dy = -1; dy <= 1; dy++)
+                        {
+                            if (dx == 0 && dy == 0) continue;
+                            int nx = x + dx, ny = y + dy;
+                            if (nx >= 0 && nx < m_width && ny >= 0 && ny < m_height)
+                                visibleCells.Add(new Vector2Int(nx, ny));
+                        }
                     }
                 }
             }
         }
 
-        var revealed = (player == "X") ? revealedX : revealedO;
-        visible.UnionWith(revealed);
+        HashSet<Vector2Int> revealed = (player == "X") ? m_revealedCellsX : m_revealedCellsO;
+        visibleCells.UnionWith(revealed);
 
-        for (int x = 0; x < width; x++)
-            for (int y = 0; y < height; y++)
-                cells[x, y]?.SetVisible(visible.Contains(new Vector2Int(x, y)));
-    }
-
-    public void HighlightAllCells(bool active)
-    {
-        Color highlight = new Color(1f, 1f, 0.5f, 0.3f);
-        for (int x = 0; x < width; x++)
-            for (int y = 0; y < height; y++)
-                if (active) cells[x, y]?.SetTemporaryHighlight(highlight);
-                else cells[x, y]?.ClearTemporaryHighlight();
+        for (int x = 0; x < m_width; x++)
+        {
+            for (int y = 0; y < m_height; y++)
+            {
+                bool isVisible = visibleCells.Contains(new Vector2Int(x, y));
+                m_cells[x, y]?.SetVisible(isVisible);
+            }
+        }
     }
 
     public List<Vector2Int> GetValidMoves(string player)
     {
-        List<Vector2Int> moves = new List<Vector2Int>();
-        for (int x = 0; x < width; x++)
-            for (int y = 0; y < height; y++)
+        List<Vector2Int> valid = new List<Vector2Int>();
+        for (int x = 0; x < m_width; x++)
+        {
+            for (int y = 0; y < m_height; y++)
+            {
                 if (IsCellEmpty(x, y) && IsAdjacentToPlayer(x, y, player))
-                    moves.Add(new Vector2Int(x, y));
-        return moves;
+                    valid.Add(new Vector2Int(x, y));
+            }
+        }
+        return valid;
     }
 
-    private bool IsAdjacentToPlayer(int x, int y, string player)
+    bool IsAdjacentToPlayer(int x, int y, string player)
     {
-        foreach (var off in neighborOffsets)
+        for (int dx = -1; dx <= 1; dx++)
         {
-            int nx = x + off.x, ny = y + off.y;
-            if (nx >= 0 && nx < width && ny >= 0 && ny < height && boardState[nx, ny] == player)
-                return true;
+            for (int dy = -1; dy <= 1; dy++)
+            {
+                if (dx == 0 && dy == 0) continue;
+                int nx = x + dx, ny = y + dy;
+                if (nx >= 0 && nx < m_width && ny >= 0 && ny < m_height)
+                    if (m_boardState[nx, ny] == player)
+                        return true;
+            }
         }
         return false;
     }
 
-    public bool HasValidMoves(string player) => GetValidMoves(player).Count > 0;
-
-    public bool CheckWin(string player, int threshold)
+    public void SetAllCellsInteractable(bool interactable)
     {
-        Vector2Int start = (player == "X") ? startX : startO;
-        bool[,] visited = new bool[width, height];
-        bool found = false;
-        FindLongestPath(start, player, visited, 1, threshold, ref found);
-        return found;
+        for (int x = 0; x < m_width; x++)
+        {
+            for (int y = 0; y < m_height; y++)
+            {
+                if (m_cells[x, y] != null)
+                {
+                    m_cells[x, y].SetInteractable(interactable);
+                }
+            }
+        }
+    }
+    public bool HasValidMoves(string player)
+    {
+        return GetValidMoves(player).Count > 0;
     }
 
-    private void FindLongestPath(Vector2Int cur, string player, bool[,] visited, int len, int th, ref bool found)
+    public bool CheckWin(string player)
     {
-        if (found) return;
-        if (len >= th) { found = true; return; }
-        visited[cur.x, cur.y] = true;
-        foreach (var off in neighborOffsets)
+        Vector2Int start = (player == "X") ? m_startX : m_startO;
+        bool[,] visited = new bool[m_width, m_height];
+        int longestPath = FindLongestPath(start, player, visited);
+
+        return longestPath >= 10;
+    }
+
+    private int FindLongestPath(Vector2Int current, string player, bool[,] visited)
+    {
+        visited[current.x, current.y] = true;
+        int maxLength = 1;
+
+        foreach (Vector2Int neighbor in GetNeighbors(current))
         {
-            int nx = cur.x + off.x, ny = cur.y + off.y;
-            if (nx >= 0 && nx < width && ny >= 0 && ny < height && !visited[nx, ny] && boardState[nx, ny] == player)
-                FindLongestPath(new Vector2Int(nx, ny), player, visited, len + 1, th, ref found);
+            if (neighbor.x >= 0 && neighbor.x < m_width && neighbor.y >= 0 && neighbor.y < m_height &&
+                !visited[neighbor.x, neighbor.y] &&
+                m_boardState[neighbor.x, neighbor.y] == player)
+            {
+                int length = 1 + FindLongestPath(neighbor, player, visited);
+                if (length > maxLength) maxLength = length;
+            }
         }
-        visited[cur.x, cur.y] = false;
+
+        visited[current.x, current.y] = false;
+        return maxLength;
+    }
+
+    private List<Vector2Int> GetNeighbors(Vector2Int cell)
+    {
+        List<Vector2Int> neighbors = new List<Vector2Int>();
+        for (int dx = -1; dx <= 1; dx++)
+        {
+            for (int dy = -1; dy <= 1; dy++)
+            {
+                if (dx == 0 && dy == 0) continue;
+                neighbors.Add(new Vector2Int(cell.x + dx, cell.y + dy));
+            }
+        }
+        return neighbors;
     }
 
     public void HighlightValidMoves(string player)
     {
         ClearAllHighlights();
-        foreach (var m in GetValidMoves(player))
-            cells[m.x, m.y]?.Highlight(true);
+        foreach (var move in GetValidMoves(player))
+            m_cells[move.x, move.y]?.Highlight(true);
     }
 
     public void ClearAllHighlights()
     {
-        foreach (var c in cells) c?.ClearHighlight();
+        foreach (var cell in m_cells)
+            cell?.ClearHighlight();
     }
 
     public void DisableAllCells()
     {
-        foreach (var c in cells) c?.SetInteractable(false);
+        foreach (var cell in m_cells)
+            if (cell != null && cell.TryGetComponent(out UnityEngine.UI.Button btn))
+                btn.interactable = false;
     }
 
-    public void SetAllCellsInteractable(bool interactable)
+    [ContextMenu("Auto Assign Coordinates")]
+    void EditorAutoAssign()
     {
-        foreach (var c in cells) c?.SetInteractable(interactable);
+        InitializeArrays();
+        FindAndAssignCells();
     }
-
-    [ContextMenu("Auto Assign")]
-    private void AutoAssign() => FindAndAssignCells();
 }

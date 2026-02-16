@@ -1,124 +1,212 @@
-п»їusing System.Collections.Generic;
 using UnityEngine;
-using Abilities;
+using System.Collections.Generic;
 
 public class AbilityManager : MonoBehaviour
 {
-    public static AbilityManager Instance { get; private set; }
+    public static AbilityManager m_instance { get; private set; }
 
-    [SerializeField] private AbilitySlot[] xSlots;
-    [SerializeField] private AbilitySlot[] oSlots;
+    [Header("Слоты игроков")]
+    public AbilitySlot[] m_xSlots;
+    public AbilitySlot[] m_oSlots;
 
-    private Dictionary<string, AbilityType> activeBonus = new();
-    private Dictionary<string, AbilityType> chargedBonus = new();
-    private Dictionary<string, AbilitySlot> centerSlot = new();
+    private Dictionary<string, AbilityType> m_activeBonus = new Dictionary<string, AbilityType>();
+    private Dictionary<string, AbilityType> m_chargedBonus = new Dictionary<string, AbilityType>();
+    private Dictionary<string, AbilitySlot> m_centerSlot = new Dictionary<string, AbilitySlot>();
 
-    private void Awake()
+    void Awake()
     {
-        if (Instance == null) Instance = this; else Destroy(gameObject);
+        if (m_instance == null)
+            m_instance = this;
+        else
+            Destroy(gameObject);
     }
 
-    private void Start()
+    void Start()
     {
+        InitializeSlots();
+    }
+
+    void InitializeSlots()
+    {
+        AbilitySlot[] allSlots = FindObjectsByType<AbilitySlot>(FindObjectsSortMode.None);
+        List<AbilitySlot> xList = new List<AbilitySlot>();
+        List<AbilitySlot> oList = new List<AbilitySlot>();
+
+        foreach (var slot in allSlots)
+        {
+            if (slot.m_owner == "X")
+                xList.Add(slot);
+            else if (slot.m_owner == "O")
+                oList.Add(slot);
+        }
+
+        m_xSlots = xList.ToArray();
+        m_oSlots = oList.ToArray();
+
+        m_activeBonus["X"] = AbilityType.None;
+        m_activeBonus["O"] = AbilityType.None;
+        m_chargedBonus["X"] = AbilityType.None;
+        m_chargedBonus["O"] = AbilityType.None;
+
         AssignSlotTypes("X");
         AssignSlotTypes("O");
     }
 
-    private void AssignSlotTypes(string player)
+    void AssignSlotTypes(string player)
     {
-        var slots = (player == "X") ? xSlots : oSlots;
+        AbilitySlot[] slots = (player == "X") ? m_xSlots : m_oSlots;
         foreach (var slot in slots)
         {
-            if (slot == null) continue;
-
-            if (slot.Position == "Center")
+            if (slot.m_position == "Center")
             {
-                slot.Ability = AbilityType.None;
-                centerSlot[player] = slot;
-                slot.SetState(AbilitySlotState.Active, true);
+                slot.m_abilityType = AbilityType.None;
+                m_centerSlot[player] = slot;
+                slot.SetState(AbilitySlotState.Active);
+                slot.SetInteractable(true);
             }
             else
             {
-                slot.Ability = slot.Position switch
+                switch (slot.m_position)
                 {
-                    "Up" => AbilityType.DoubleMove,
-                    "Down" => AbilityType.Recon,
-                    "Left" => AbilityType.Shoot,
-                    "Right" => AbilityType.None,
-                    _ => AbilityType.None
-                };
-                slot.SetState(AbilitySlotState.Inactive, false);
+                    case "Up":
+                        slot.m_abilityType = AbilityType.DoubleMove;
+                        break;
+                    case "Down":
+                        slot.m_abilityType = AbilityType.Recon;
+                        break;
+                    case "Left":
+                        slot.m_abilityType = AbilityType.Shoot;
+                        break;
+                    case "Right":
+                        slot.m_abilityType = AbilityType.None; // задел на будущее
+                        break;
+                }
+                slot.SetState(AbilitySlotState.Inactive);
+                slot.SetInteractable(false);
             }
-            slot.Setup(player, slot.Position, slot.Ability);
+            slot.Setup(slot.m_owner, slot.m_position, slot.m_abilityType);
         }
     }
 
     public void StartTurn(string player)
     {
-        if (chargedBonus.TryGetValue(player, out var bonus) && bonus != AbilityType.None)
+        if (m_chargedBonus[player] != AbilityType.None)
         {
-            activeBonus[player] = bonus;
-            chargedBonus[player] = AbilityType.None;
-            SetSlotState(player, bonus, AbilitySlotState.Active, false);
+            m_activeBonus[player] = m_chargedBonus[player];
+            m_chargedBonus[player] = AbilityType.None;
+            SetSlotStateByAbility(player, m_activeBonus[player], AbilitySlotState.Active, true);
         }
-        else activeBonus[player] = AbilityType.None;
+        else
+        {
+            m_activeBonus[player] = AbilityType.None;
+        }
 
-        if (centerSlot.TryGetValue(player, out var center))
-            center.SetState(AbilitySlotState.Active, true);
+        if (m_centerSlot.ContainsKey(player) && m_centerSlot[player] != null)
+        {
+            m_centerSlot[player].SetState(AbilitySlotState.Active);
+            m_centerSlot[player].SetInteractable(true);
+        }
 
-        var slots = (player == "X") ? xSlots : oSlots;
+        AbilitySlot[] slots = (player == "X") ? m_xSlots : m_oSlots;
         foreach (var slot in slots)
         {
-            if (slot.Position == "Center") continue;
-            if (slot.Ability == activeBonus[player])
-                slot.SetState(AbilitySlotState.Active, false);
-            else if (slot.Ability != AbilityType.None)
-                slot.SetState(AbilitySlotState.Inactive, true);
+            if (slot.m_position == "Center") continue;
+            if (slot.m_abilityType == m_activeBonus[player])
+            {
+                slot.SetState(AbilitySlotState.Active);
+                slot.SetInteractable(false);
+            }
+            else if (slot.m_abilityType != AbilityType.None)
+            {
+                slot.SetState(AbilitySlotState.Inactive);
+                slot.SetInteractable(true);
+            }
             else
-                slot.SetState(AbilitySlotState.Inactive, false);
+            {
+                slot.SetState(AbilitySlotState.Inactive);
+                slot.SetInteractable(false);
+            }
         }
     }
 
-    public void OnAbilitySlotClicked(string player, AbilitySlot slot)
+    public void OnAbilitySlotClicked(string player, AbilitySlot clickedSlot)
     {
-        if (!centerSlot.TryGetValue(player, out var center) || center.State != AbilitySlotState.Active) return;
-        if (slot.Ability == activeBonus[player] || slot.Ability == AbilityType.None) return;
+        if (!m_centerSlot.ContainsKey(player) || m_centerSlot[player].m_state != AbilitySlotState.Active)
+        {
+            return;
+        }
 
-        chargedBonus[player] = slot.Ability;
-        slot.SetState(AbilitySlotState.Charging, false);
-        center.SetState(AbilitySlotState.Inactive, false);
+        if (clickedSlot.m_abilityType == m_activeBonus[player])
+        {
+            return;
+        }
 
-        var slots = (player == "X") ? xSlots : oSlots;
-        foreach (var s in slots)
-            if (s != slot && s.Position != "Center")
-                s.SetInteractable(false);
+        if (clickedSlot.m_abilityType == AbilityType.None)
+        {
+            return;
+        }
+
+        m_chargedBonus[player] = clickedSlot.m_abilityType;
+
+        clickedSlot.SetState(AbilitySlotState.Charging);
+        clickedSlot.SetInteractable(false);
+
+        m_centerSlot[player].SetState(AbilitySlotState.Inactive);
+        m_centerSlot[player].SetInteractable(false);
+
+        AbilitySlot[] slots = (player == "X") ? m_xSlots : m_oSlots;
+        foreach (var slot in slots)
+        {
+            if (slot == clickedSlot) continue;
+            if (slot.m_position == "Center") continue;
+            slot.SetInteractable(false);
+        }
     }
 
     public AbilityType ApplyBonus(string player)
     {
-        if (activeBonus.TryGetValue(player, out var bonus) && bonus != AbilityType.None)
+        AbilityType bonus = m_activeBonus[player];
+        if (bonus != AbilityType.None)
         {
-            SetSlotState(player, bonus, AbilitySlotState.Inactive, false);
-            activeBonus[player] = AbilityType.None;
-            return bonus;
+            SetSlotStateByAbility(player, bonus, AbilitySlotState.Inactive, false);
+            m_activeBonus[player] = AbilityType.None;
         }
-        return AbilityType.None;
+        return bonus;
     }
 
-    private void SetSlotState(string player, AbilityType ability, AbilitySlotState state, bool interactable)
+    private void SetSlotStateByAbility(string player, AbilityType ability, AbilitySlotState state, bool interactable)
     {
-        var slots = (player == "X") ? xSlots : oSlots;
-        foreach (var s in slots)
-            if (s.Ability == ability) { s.SetState(state, interactable); break; }
+        AbilitySlot[] slots = (player == "X") ? m_xSlots : m_oSlots;
+        foreach (var slot in slots)
+        {
+            if (slot.m_abilityType == ability)
+            {
+                slot.SetState(state);
+                slot.SetInteractable(interactable);
+                break;
+            }
+        }
     }
 
-    public void ResetAll()
+    public void ResetAbilities()
     {
-        foreach (var s in xSlots) s.ResetSlot();
-        foreach (var s in oSlots) s.ResetSlot();
-        activeBonus.Clear();
-        chargedBonus.Clear();
-        if (centerSlot.ContainsKey("X")) centerSlot["X"].SetState(AbilitySlotState.Active, true);
-        if (centerSlot.ContainsKey("O")) centerSlot["O"].SetState(AbilitySlotState.Active, true);
+        foreach (var slot in m_xSlots) { slot.ResetSlot(); }
+        foreach (var slot in m_oSlots) { slot.ResetSlot(); }
+
+        m_activeBonus["X"] = AbilityType.None;
+        m_activeBonus["O"] = AbilityType.None;
+        m_chargedBonus["X"] = AbilityType.None;
+        m_chargedBonus["O"] = AbilityType.None;
+
+        if (m_centerSlot.ContainsKey("X"))
+        {
+            m_centerSlot["X"].SetState(AbilitySlotState.Active);
+            m_centerSlot["X"].SetInteractable(true);
+        }
+        if (m_centerSlot.ContainsKey("O"))
+        {
+            m_centerSlot["O"].SetState(AbilitySlotState.Active);
+            m_centerSlot["O"].SetInteractable(true);
+        }
     }
 }
