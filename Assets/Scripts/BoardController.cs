@@ -274,6 +274,24 @@ public class BoardController : MonoBehaviour
             m_cells[move.x, move.y]?.Highlight(true);
     }
 
+    public void HighlightAllCells(bool active)
+    {
+        Color tempColor = new Color(1f, 1f, 0.5f, 0.3f);
+        for (int x = 0; x < m_width; x++)
+        {
+            for (int y = 0; y < m_height; y++)
+            {
+                if (m_cells[x, y] != null)
+                {
+                    if (active)
+                        m_cells[x, y].SetTemporaryHighlight(tempColor);
+                    else
+                        m_cells[x, y].ClearTemporaryHighlight();
+                }
+            }
+        }
+    }
+
     public void ClearAllHighlights()
     {
         foreach (var cell in m_cells)

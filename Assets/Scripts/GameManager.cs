@@ -56,6 +56,9 @@ public class GameManager : MonoBehaviour
             return;
         }
 
+        if (m_abilityManager != null)
+            m_abilityManager.Initialize();
+
         m_isXTurn = true;
         m_gameOver = false;
         m_isExtraMove = false;
@@ -133,6 +136,7 @@ public class GameManager : MonoBehaviour
             m_pendingOwner = currentPlayer;
 
             m_boardController.SetAllCellsInteractable(true);
+            m_boardController.HighlightAllCells(true);
 
             m_uiManager?.UpdateStatus(m_isXTurn);
             return;
@@ -168,6 +172,8 @@ public class GameManager : MonoBehaviour
 
             m_boardController.UpdateVisibilityForPlayer(currentPlayer);
         }
+
+        m_boardController.HighlightAllCells(false);
 
         m_pendingAbility = AbilityType.None;
         m_pendingOwner = "";

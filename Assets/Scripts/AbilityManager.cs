@@ -12,6 +12,7 @@ public class AbilityManager : MonoBehaviour
     private Dictionary<string, AbilityType> m_activeBonus = new Dictionary<string, AbilityType>();
     private Dictionary<string, AbilityType> m_chargedBonus = new Dictionary<string, AbilityType>();
     private Dictionary<string, AbilitySlot> m_centerSlot = new Dictionary<string, AbilitySlot>();
+    private bool m_initialized = false;
 
     void Awake()
     {
@@ -23,11 +24,13 @@ public class AbilityManager : MonoBehaviour
 
     void Start()
     {
-        InitializeSlots();
+        Initialize();
     }
 
-    void InitializeSlots()
+    public void Initialize()
     {
+        if (m_initialized) return;
+
         AbilitySlot[] allSlots = FindObjectsByType<AbilitySlot>(FindObjectsSortMode.None);
         List<AbilitySlot> xList = new List<AbilitySlot>();
         List<AbilitySlot> oList = new List<AbilitySlot>();
@@ -50,6 +53,8 @@ public class AbilityManager : MonoBehaviour
 
         AssignSlotTypes("X");
         AssignSlotTypes("O");
+
+        m_initialized = true;
     }
 
     void AssignSlotTypes(string player)
@@ -90,6 +95,8 @@ public class AbilityManager : MonoBehaviour
 
     public void StartTurn(string player)
     {
+        if (!m_initialized) Initialize();
+
         if (m_chargedBonus[player] != AbilityType.None)
         {
             m_activeBonus[player] = m_chargedBonus[player];

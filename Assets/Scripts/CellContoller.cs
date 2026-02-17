@@ -16,6 +16,8 @@ public class CellController : MonoBehaviour
     private Color defaultColor;
     private Color hiddenColor = new Color(0.15f, 0.15f, 0.15f, 1f);
     private string m_symbol = "";
+    private bool isHighlighted = false;
+    private bool isVisible = true;
 
     void Start()
     {
@@ -67,7 +69,8 @@ public class CellController : MonoBehaviour
             m_symbolText.text = "";
         if (m_button != null)
             m_button.interactable = true;
-        ClearHighlight();
+        isHighlighted = false;
+        isVisible = true;
         if (m_backgroundImage != null)
             m_backgroundImage.color = defaultColor;
     }
@@ -79,35 +82,51 @@ public class CellController : MonoBehaviour
 
     public void Highlight(bool active)
     {
-        if (m_backgroundImage != null)
-        {
-            if (active)
-                m_backgroundImage.color = new Color(0.3f, 1f, 0.3f, 0.5f);
-            else
-                m_backgroundImage.color = defaultColor;
-        }
+        isHighlighted = active;
+        UpdateBackgroundColor();
     }
 
     public void ClearHighlight()
     {
-        if (m_backgroundImage != null)
-            m_backgroundImage.color = defaultColor;
+        isHighlighted = false;
+        UpdateBackgroundColor();
     }
 
     public void SetVisible(bool visible)
     {
-        if (m_backgroundImage != null)
-            m_backgroundImage.color = visible ? defaultColor : hiddenColor;
+        isVisible = visible;
+        UpdateBackgroundColor();
 
         if (m_symbolText != null)
             m_symbolText.text = visible ? m_symbol : "";
 
-        if (m_outline != null)
-            m_outline.enabled = visible;
+        // Рамка всегда включена для визуальной структуры
+        // if (m_outline != null) m_outline.enabled = visible;
 
         if (m_button != null && visible && string.IsNullOrEmpty(m_symbol))
             m_button.interactable = true;
         else if (m_button != null)
             m_button.interactable = false;
+    }
+
+    private void UpdateBackgroundColor()
+    {
+        if (m_backgroundImage == null) return;
+
+        if (isHighlighted)
+            m_backgroundImage.color = new Color(0.3f, 1f, 0.3f, 0.5f); // зелёная подсветка
+        else
+            m_backgroundImage.color = isVisible ? defaultColor : hiddenColor;
+    }
+
+    public void SetTemporaryHighlight(Color color)
+    {
+        if (m_backgroundImage != null)
+            m_backgroundImage.color = color;
+    }
+
+    public void ClearTemporaryHighlight()
+    {
+        UpdateBackgroundColor();
     }
 }
